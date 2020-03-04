@@ -7,10 +7,12 @@
 #
 # Define YAML anchors
 .global_environment_vars: &global_environment_vars
-  DEV_IMAGE_REPO: 'anchore/anchore-engine-dev'
-  PROD_IMAGE_REPO: 'anchore/anchore-engine-dev'
-  RELEASE_BRANCHES: '0.2 0.3 0.4 0.5 0.6'
-  LATEST_RELEASE_BRANCH: '0.6'
+  DEV_IMAGE_REPO: "anchore/anchore-engine-dev"
+  #PROD_IMAGE_REPO: "anchore/anchore-engine"
+  RELEASE_BRANCHES: "0.2 0.3 0.4 0.5 0.6"
+  LATEST_RELEASE_BRANCH: "0.6"
+  VERBOSE: "true"
+  TERM: "xterm"
 
 .attach_workspace: &attach_workspace
   attach_workspace:
@@ -21,6 +23,18 @@
     name: Load Docker image layer cache
     command: |
       docker load -i "/home/circleci/workspace/caches/${CIRCLE_SHA1}.tar" || true
+
+.ssh_forward_port: &ssh_forward_port
+  run:
+    name: Forward remote-docker ports for testing
+    command: |
+      ssh -MS anchore-api -fN4 -L 8228:localhost:8228 remote-docker
+      ssh -MS k8s-api -fN4 -L 32768:localhost:32768 remote-docker
+
+.docker_login: &docker_login
+  run:
+    name: Login to DockerHub
+    command: echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
 .filter_rc_tags: &filter_rc_tags
   branches:
@@ -46,15 +60,14 @@ version: 2.1
 orbs:
   anchore: anchore/anchore-engine@1.6.5
 commands:
-  run_tox_tests:
+  run_tests:
     description: |
-      Uses the make target name for the specified test to run. 
+      Uses make script to run tests
       Saves the tox cache & stores log output as artifacts
     parameters:
       test_type:
         type: string
     steps:
-      - checkout
       - restore_cache:
           keys:
             - v1-dependencies-{{ .Branch }}-{{ checksum "requirements.txt" }}
@@ -65,8 +78,6 @@ commands:
           paths:
             - ~/project/.tox
           key: v1-dependencies-{{ .Branch }}-{{ checksum "requirements.txt" }}
-      - store_artifacts:
-          path: .tox/tox.log
       - store_test_results:
           path: .tox/results
 
@@ -76,9 +87,10 @@ jobs:
       - image: circleci/python:3.6
     environment: *global_environment_vars
     steps:
-      - run_tox_tests:
-          test_type: "unit"
-    
+      - checkout
+      - run_tests:
+          test_type: unit
+
   integration_tests:
     docker:
       - image: circleci/python:3.6
@@ -90,6 +102,7 @@ jobs:
       - image: circleci/postgres:9.6
         environment:
           POSTGRES_PASSWORD: "postgres"
+    resource_class: large
     environment:
       <<: *global_environment_vars
       ANCHORE_TEST_S3_ACCESS_KEY: "9EB92C7W61YPFQ6QLDOU"
@@ -107,13 +120,14 @@ jobs:
       ANCHORE_TEST_DB_PASS: "postgres"
       ANCHORE_TEST_DATA_ENV_DIR: "test/data/test_data_env"
     steps:
-      - setup_remote_docker
-      - run_tox_tests:
-          test_type: "integration"
+      - checkout
+      - run_tests:
+          test_type: integration
 
   build:
     docker:
       - image: circleci/python:3.6
+    resource_class: large
     environment: *global_environment_vars
     steps:
       - setup_remote_docker:
@@ -123,23 +137,49 @@ jobs:
           name: Build Docker image
           command: make build
       - run:
-          name: Run compose tests
-          command: |
-            # forward port 8228 from remote-docker to runner
-            ssh -MS anchore -fN4 -L 8228:localhost:8228 remote-docker
-            make test-compose
-      - run:
           name: Save image to workspace
           command: |
             rm -rf /home/circleci/workspace/caches/
             mkdir -p /home/circleci/workspace/caches/
-            docker save -o "/home/circleci/workspace/caches/${CIRCLE_SHA1}.tar" anchore-engine:test
+            docker save -o "/home/circleci/workspace/caches/${CIRCLE_SHA1}.tar" ${CIRCLE_PROJECT_REPONAME}:dev
       - persist_to_workspace:
           root: /home/circleci/workspace/
           paths:
             - caches/*
 
-  push_dockerhub:
+  functional_tests:
+    docker:
+      - image: circleci/python:3.6
+    resource_class: large
+    environment: *global_environment_vars
+    steps:
+      - setup_remote_docker
+      - checkout
+      - <<: *attach_workspace
+      - <<: *load_docker_image
+      - <<: *ssh_forward_port
+      - run_tests:
+          test_type: functional
+
+  e2e_tests:
+    docker:
+      - image: circleci/python:3.6
+    resource_class: large
+    environment: *global_environment_vars
+    steps:
+      - setup_remote_docker
+      - checkout
+      - <<: *ssh_forward_port
+      - <<: *docker_login
+      - run:
+          name: Run e2e tests
+          command: make test-e2e
+
+  push_image:
+    description: Uses make script to push images to DockerHub - dev, rc, prod
+    parameters:
+      make_job:
+        type: string
     docker:
       - image: circleci/python:3.6
     environment: *global_environment_vars
@@ -148,37 +188,64 @@ jobs:
       - checkout
       - <<: *attach_workspace
       - <<: *load_docker_image
+      - <<: *docker_login
       - run:
           name: Push to Dockerhub
-          command: |
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            make push
-
-
+          command: make << parameters.make_job >>
 
 workflows:
   default_workflow:
     jobs:
       - unit_tests
       - integration_tests
-      - build:
-          context: dockerhub
-          filters: *filter_release_branch
-      - push_dockerhub:
-          context: dockerhub
-          filters: *filter_release_branch
+      - build
+      - functional_tests:
           requires:
             - build
+      - push_image:
+          name: push_dev_image
+          make_job: push-dev
+          context: dockerhub
+          filters: *filter_release_branch
+          requires:
+            - functional_tests
             - unit_tests
             - integration_tests
-      - trigger_downstream:
-          context: release_candidates
+      - e2e_tests:
+          context: e2e-testing
+          filters: *filter_release_branch
           requires:
-            - push_dockerhub
-      - anchore/image_scan:
+            - push_dev_image
+
+  rc_image_workflow:
+    jobs:
+      - e2e_tests:
+          name: rc_e2e_tests
+          context: e2e-testing
+          filters: *filter_rc_tags
+      - push_image:
+          name: push_rc_image
+          make_job: push-rc
           context: dockerhub
+          filters: *filter_rc_tags
           requires:
-            - push_dockerhub
-          image_name: 'anchore/anchore-engine-dev:${CIRCLE_SHA1}'
-          private_registry: true
-          timeout: '2000'
+            - rc_e2e_tests
+
+  prod_image_workflow:
+    jobs:
+      - e2e_tests:
+          name: prod_e2e_tests
+          context: e2e-testing
+          filters: *filter_semver_tags
+      - hold_for_approval:
+          type: approval
+          filters: *filter_semver_tags
+          requires:
+            - prod_e2e_tests
+      - push_image:
+          name: push_prod_image
+          make_job: push-prod
+          context: dockerhub-prod
+          filters: *filter_semver_tags
+          requires:
+            - hold_for_approval

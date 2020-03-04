@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+
+######################################################
+###   PROJECT SPECIFIC FUNCTIONS - RUNTIME ORDER   ###
+######################################################
+
+build() {
+    # dont use the docker build cache if building from a tag
+    print_colorized WARN "building image ${TEST_IMAGE_NAME}"
+    if [[ -n "${GIT_TAG}" ]]; then
+        local no_build_cache="--no-cache"
+    fi
+    docker build --target anchore-engine-builder ${no_build_cache} -t "${GIT_REPO}:builder" -f ./Dockerfile .
+    docker build --build-arg ANCHORE_COMMIT="${COMMIT_SHA}" ${no_build_cache} --build-arg CLI_COMMIT="${CLI_COMMIT_SHA}" -t "${TEST_IMAGE_NAME}" -f ./Dockerfile .
+    print_colorized WARN "successfully built image -- ${TEST_IMAGE_NAME}"
+}
+
+lint() {
+    install_testing_deps pylint
+    print_colorized WARN "linting project"
+    pylint anchore_engine
+    pylint anchore_manager
+}
+
+unit_tests() {
+    install_testing_deps tox
+    print_colorized WARN "running unit tests"
+    tox test/unit
+}
+
+integration_tests() {
+    install_testing_deps tox
+    print_colorized WARN "running integration tests"
+    if [[ "${CI}" == true ]]; then
+        tox test/integration
+    else
+        ./scripts/tests/test_with_deps.sh test/integration/
+    fi
+}
+
+functional_tests() {
+    install_testing_deps anchorecli docker-compose tox
+    print_colorized WARN "running functaional tests"
+    anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system wait --feedsready ''
+    anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system status
+    tox test/functional
+}
+
+push_dev_image() {
+    local dev_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+    local latest_image="${DEV_IMAGE_REPO}:latest"
+    local branch_image="${DEV_IMAGE_REPO}:${GIT_BRANCH}"
+
+    print_colorized WARN "tagging and pushing ${dev_image}"
+    docker tag "${TEST_IMAGE_NAME}" "${dev_image}"
+    docker push "${dev_image}"
+
+    if [[ "${GIT_BRANCH}" == 'master' ]]; then
+        print_colorized WARN "tagging & pushing image -- ${latest_image}"
+        docker tag "${dev_image}" "${latest_image}"
+        docker push "${latest_image}"
+    elif [[ "${GIT_BRANCH}" =~ "${RELEASE_BRANCHES}" ]]; then
+        print_colorized WARN "tagging & pushing image -- ${branch_image}"
+        docker tag "${dev_image}" "${branch_image}"
+        docker push "${branch_image}"
+    fi
+}
+
+e2e_tests() {
+    # Use the RC image if a semver tag is pushed
+    if [[ "${GIT_TAG}" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+        local engine_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
+    else
+        local engine_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+    fi
+    local helm_deploy_name="e2e-testing-${RANDOM:0:5}"
+
+    print_colorized WARN "running e2e tests using -- ${engine_image}"
+    helm repo add stable https://kubernetes-charts.storage.googleapis.com
+    helm install "${helm_deploy_name}" -f test/e2e/base-values.yaml --set anchoreEngineGlobal.image="${engine_image}" stable/anchore-engine | head -n6
+
+    # Patch anchore-engine-api nodeport to the configured port thats mapped with kind to localhost:8228
+    kubectl patch service "${helm_deploy_name}-anchore-engine-api" --type=json --patch '[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":30028}]'
+
+    install_testing_deps anchorecli
+    anchore-cli --u admin --p foobar system wait --timeout 300 --interval 10 --feedsready '' --servicesready 'catalog,apiext,policy_engine,simplequeue,analyzer'
+    anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system status
+    python scripts/tests/aetest.py docker.io/alpine:latest
+    python scripts/tests/aefailtest.py docker.io/alpine:latest
+}
+
+push_rc_image() {
+    local dev_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+    local rc_image="${DEV_IMAGE_REPO}:${GIT_TAG}"
+
+    if [[ "${CI}" == true ]]; then
+        print_colorized WARN "pulling dev image for release candidate -- ${dev_image}"
+        docker pull "${dev_image}"
+
+        print_colorized WARN "tagging and pushing image -- ${rc_image}"
+        docker tag "${dev_image}" "${rc_image}"
+        docker push "${rc_image}"
+    else
+        print_colorized WARN "CI=true must be set to push image -- ${rc_image}"
+    fi
+}
+
+push_prod_image() {
+    local prod_image="${PROD_IMAGE_REPO}:${GIT_TAG}"
+    local rc_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
+
+    if [[ "${CI}" == true ]]; then
+        print_colorized WARN "pulling RC image for release -- ${rc_image}"
+        docker pull "${rc_image}"
+
+        print_colorized WARN "tagging and pushing image -- ${prod_image}"
+        docker tag "${rc_image}" "${prod_image}"
+        docker push "${prod_image}"
+
+        if [[ "${GIT_BRANCH}" =~ "${LATEST_RELEASE_BRANCH}" ]]; then
+            local latest_image="${PROD_IMAGE_REPO}:latest"
+            print_colorized WARN "tagging and pushing image -- ${latest_image}"
+            docker tag "${prod_image}" "${latest_image}"
+            docker push "${latest_image}"
+        fi
+    else
+        print_colorized WARN "CI=true must be set to push image -- ${prod_image}"
+    fi
+}
