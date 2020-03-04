@@ -8,7 +8,7 @@
 # Define YAML anchors
 .global_environment_vars: &global_environment_vars
   DEV_IMAGE_REPO: "anchore/anchore-engine-dev"
-  #PROD_IMAGE_REPO: "anchore/anchore-engine"
+  PROD_IMAGE_REPO: "anchore/anchore-engine"
   RELEASE_BRANCHES: "0.2 0.3 0.4 0.5 0.6"
   LATEST_RELEASE_BRANCH: "0.6"
   VERBOSE: "true"
@@ -41,6 +41,12 @@
     ignore: /.*/
   tags:
     only: /^v[0-9]+(\.[0-9]+)*-rc[0-9]+$/
+
+.filter_rebuild_tags: &filter_rebuild_tags
+  branches:
+    ignore: /.*/
+  tags:
+    only: /^v[0-9]+(\.[0-9]+)*-r[0-9]+$/
 
 .filter_release_branch: &filter_release_branch
   branches:
@@ -242,6 +248,45 @@ workflows:
           filters: *filter_semver_tags
           requires:
             - prod_e2e_tests
+      - push_image:
+          name: push_prod_image
+          make_job: push-prod
+          context: dockerhub-prod
+          filters: *filter_semver_tags
+          requires:
+            - hold_for_approval
+
+  rebuild_release_workflow:
+    jobs:
+      - unit_tests:
+          filters: *filter_rebuild_tags
+      - integration_tests:
+          filters: *filter_rebuild_tags
+      - build:
+          filters: *filter_rebuild_tags
+      - functional_tests:
+          filters: *filter_rebuild_tags
+          requires:
+            - build
+      - push_image:
+          name: push_dev_image
+          make_job: push-dev
+          context: dockerhub
+          filters: *filter_rebuild_tags
+          requires:
+            - functional_tests
+            - unit_tests
+            - integration_tests
+      - e2e_tests:
+          context: e2e-testing
+          filters: *filter_rebuild_tags
+          requires:
+            - push_dev_image
+      - hold_for_approval:
+          type: approval
+          filters: *filter_semver_tags
+          requires:
+            - e2e_tests
       - push_image:
           name: push_prod_image
           make_job: push-prod
