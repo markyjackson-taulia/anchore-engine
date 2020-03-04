@@ -58,9 +58,13 @@ push-dev:
 push-rc:
 	@$(RUN_COMMAND) push_rc_image
 
+.PHONY: push-rebuild
+push-rebuild:
+	@$(RUN_COMMAND) push_rebuild_image
+
 .PHONY: push-prod
 push-prod:
-	@$(RUN_COMMAND) push_prod_image
+	@$(RUN_COMMAND) push_release_image
 
 .PHONY: venv
 venv: $(VENV_ACTIVATE) ## setup virtual env

@@ -236,6 +236,14 @@ workflows:
           filters: *filter_rc_tags
           requires:
             - rc_e2e_tests
+      - anchore/image_scan:
+          context: dockerhub
+          filters: *filter_rc_tags
+          requires:
+            - push_rc_image
+          image_name: anchore/anchore-engine-dev:${CIRCLE_TAG}
+          private_registry: true
+          timeout: '2000'
 
   prod_image_workflow:
     jobs:
@@ -256,27 +264,17 @@ workflows:
           requires:
             - hold_for_approval
 
-  rebuild_release_workflow:
+  rebuild_image_workflow:
     jobs:
-      - unit_tests:
-          filters: *filter_rebuild_tags
-      - integration_tests:
-          filters: *filter_rebuild_tags
       - build:
           filters: *filter_rebuild_tags
-      - functional_tests:
-          filters: *filter_rebuild_tags
-          requires:
-            - build
       - push_image:
           name: push_dev_image
           make_job: push-dev
           context: dockerhub
           filters: *filter_rebuild_tags
           requires:
-            - functional_tests
-            - unit_tests
-            - integration_tests
+            - build
       - e2e_tests:
           context: e2e-testing
           filters: *filter_rebuild_tags
@@ -284,13 +282,13 @@ workflows:
             - push_dev_image
       - hold_for_approval:
           type: approval
-          filters: *filter_semver_tags
+          filters: *filter_rebuild_tags
           requires:
             - e2e_tests
       - push_image:
-          name: push_prod_image
-          make_job: push-prod
+          name: push_rebuild_image
+          make_job: push-rebuild
           context: dockerhub-prod
-          filters: *filter_semver_tags
+          filters: *filter_rebuild_tags
           requires:
             - hold_for_approval

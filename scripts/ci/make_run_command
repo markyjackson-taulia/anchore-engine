@@ -43,7 +43,7 @@ main() {
         # run function/script with all arguments passed
         "$@"
     else
-        print_colorized ERROR "ERROR - ${COMMAND} is not a valid function or script name" >&2
+        print_colorized ERROR "ERROR - $1 is not a valid function or script name" >&2
         display_usage
         exit 1
     fi

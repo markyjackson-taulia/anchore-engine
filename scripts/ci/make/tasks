@@ -8,10 +8,10 @@ build() {
     # dont use the docker build cache if building from a tag
     print_colorized WARN "building image ${TEST_IMAGE_NAME}"
     if [[ -n "${GIT_TAG}" ]]; then
-        local no_build_cache="--no-cache"
+        local build_cache="--no-cache"
     fi
-    docker build --target anchore-engine-builder ${no_build_cache} -t "${GIT_REPO}:builder" -f ./Dockerfile .
-    docker build --build-arg ANCHORE_COMMIT="${COMMIT_SHA}" ${no_build_cache} --build-arg CLI_COMMIT="${CLI_COMMIT_SHA}" -t "${TEST_IMAGE_NAME}" -f ./Dockerfile .
+    docker build --target anchore-engine-builder ${build_cache} -t "${GIT_REPO}:builder" -f ./Dockerfile .
+    docker build --build-arg ANCHORE_COMMIT="${COMMIT_SHA}" ${build_cache} --build-arg CLI_COMMIT="${CLI_COMMIT_SHA}" -t "${TEST_IMAGE_NAME}" -f ./Dockerfile .
     print_colorized WARN "successfully built image -- ${TEST_IMAGE_NAME}"
 }
 
@@ -105,7 +105,24 @@ push_rc_image() {
     fi
 }
 
-push_prod_image() {
+push_rebuild_image() {
+    local dev_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+    local rebuild_image="${PROD_IMAGE_REPO}:${GIT_TAG}"
+
+    if [[ "${CI}" == true ]]; then
+        print_colorized WARN "pulling dev image for release candidate -- ${dev_image}"
+        docker pull "${dev_image}"
+
+        print_colorized WARN "tagging and pushing image -- ${rebuild_image}"
+        sleep 3
+        docker tag "${dev_image}" "${rebuild_image}"
+        docker push "${rebuild_image}"
+    else
+        print_colorized WARN "CI=true must be set to push image -- ${rebuild_image}"
+    fi
+}
+
+push_release_image() {
     local prod_image="${PROD_IMAGE_REPO}:${GIT_TAG}"
     local rc_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
 
@@ -114,12 +131,14 @@ push_prod_image() {
         docker pull "${rc_image}"
 
         print_colorized WARN "tagging and pushing image -- ${prod_image}"
+        sleep 3
         docker tag "${rc_image}" "${prod_image}"
         docker push "${prod_image}"
 
         if [[ "${GIT_BRANCH}" =~ "${LATEST_RELEASE_BRANCH}" ]]; then
             local latest_image="${PROD_IMAGE_REPO}:latest"
             print_colorized WARN "tagging and pushing image -- ${latest_image}"
+            sleep 3
             docker tag "${prod_image}" "${latest_image}"
             docker push "${latest_image}"
         fi
