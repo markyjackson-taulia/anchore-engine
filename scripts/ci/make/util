@@ -144,14 +144,14 @@ setup_venv() {
     local python_binary_name="${PYTHON##*/}"
 
     if [[ ${CI} == true ]]; then
-        hash pip || apt install -y python-pip
+        hash python3 || apt install -y python3
     else
-        hash pip || (print_colorized ERROR "ensure python-pip is installed before attempting to setup virtualenv" && exit 1)
+        hash python3 || (print_colorized ERROR "ensure python3 is installed before attempting to setup virtualenv" && exit 1)
     fi
     # create virtualenv using specified python binary if it doesnt alredy exist
     if [[ ! -x "${PYTHON}" ]]; then
         print_colorized WARN "creating virtualenv ${VENV}"
-        ${PYTHON} -m venv "${VENV}"
+        python3 -m venv "${VENV}"
     fi
     print_colorized WARN "to enable virtual environment run: source ${VENV_ACTIVATE}"
 
