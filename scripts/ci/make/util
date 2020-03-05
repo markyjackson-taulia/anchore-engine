@@ -21,7 +21,7 @@ clean_python_env() {
         *.egg-info \
         dist \
         build
-    find . -name '*.pyc' -exec rm -f {} \;
+    find . \( -type f -name "*.py[co]" -o -type d -name "__pycache__" \) -delete
 }
 
 clean_tests() {
@@ -42,12 +42,12 @@ docker_compose_up() {
 
 install() {
     print_colorized WARN "installing ${GIT_REPO} to ${VENV}"
-    pip install .
+    ${PYTHON} setup.py install
 }
 
 install_dev() {
     print_colorized WARN "installing ${GIT_REPO} in editable mode to ${VENV}"
-    pip install --editable .
+    ${PYTHON} -m pip install --editable .
 }
 
 install_cluster_deps() {
@@ -72,11 +72,8 @@ install_cluster_deps() {
 
 install_testing_deps() {
     print_colorized WARN "installing dependencies: $*"
-    mkdir -p .tox
     for p in "$@"; do
-        if [[ ! "$(echo ${VENV}/bin/*)" =~ "$p" ]]; then
-            pip install -q "$p"
-        fi
+        ${PYTHON} -m pip install -q "$p"
     done
 }
 
@@ -148,15 +145,13 @@ setup_venv() {
 
     if [[ ${CI} == true ]]; then
         hash pip || apt install -y python-pip
-        hash virtualenv || pip install virtualenv
     else
         hash pip || (print_colorized ERROR "ensure python-pip is installed before attempting to setup virtualenv" && exit 1)
-        hash virtualenv || (print_colorized ERROR "ensure virtualenv is installed before attempting to setup a virtual environment" && exit 1)
     fi
     # create virtualenv using specified python binary if it doesnt alredy exist
     if [[ ! -x "${PYTHON}" ]]; then
         print_colorized WARN "creating virtualenv ${VENV}"
-        virtualenv -p "${PYTHON##*/}" "${VENV}"
+        ${PYTHON} -m venv "${VENV}"
     fi
     print_colorized WARN "to enable virtual environment run: source ${VENV_ACTIVATE}"
 
