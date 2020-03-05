@@ -203,8 +203,12 @@ workflows:
   default_workflow:
     jobs:
       - unit_tests
-      - integration_tests
-      - build
+      - integration_tests:
+          requires:
+            - unit_tests
+      - build:
+          requires:
+            - unit_tests
       - functional_tests:
           requires:
             - build
@@ -215,7 +219,6 @@ workflows:
           filters: *filter_release_branch
           requires:
             - functional_tests
-            - unit_tests
             - integration_tests
       - e2e_tests:
           context: e2e-testing
@@ -266,8 +269,11 @@ workflows:
 
   rebuild_image_workflow:
     jobs:
+      - unit_tests
       - build:
           filters: *filter_rebuild_tags
+          requires:
+            - unit_tests
       - push_image:
           name: push_dev_image
           make_job: push-dev
