@@ -175,6 +175,8 @@ jobs:
     steps:
       - setup_remote_docker
       - checkout
+      - <<: *attach_workspace
+      - <<: *load_docker_image
       - <<: *ssh_forward_port
       - <<: *docker_login
       - run:
@@ -212,6 +214,11 @@ workflows:
       - functional_tests:
           requires:
             - build
+      - e2e_tests:
+          context: e2e-testing
+          filters: *filter_release_branch
+          requires:
+            - build
       - push_image:
           name: push_dev_image
           make_job: push-dev
@@ -220,11 +227,7 @@ workflows:
           requires:
             - functional_tests
             - integration_tests
-      - e2e_tests:
-          context: e2e-testing
-          filters: *filter_release_branch
-          requires:
-            - push_dev_image
+            - e2e_tests
 
   rc_image_workflow:
     jobs:

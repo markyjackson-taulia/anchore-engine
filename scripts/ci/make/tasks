@@ -71,13 +71,16 @@ e2e_tests() {
     # Use the RC image if a semver tag is pushed
     if [[ "${GIT_TAG}" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
         local engine_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
-        print_colorized WARN "detected semver git tag, using RC image for testing -- $engine_image"
+        print_colorized WARN "detected semver git tag, using RC image for testing -- ${engine_image}"
+    elif docker inspect "${TEST_IMAGE_NAME}"; then
+        engine_image="${TEST_IMAGE_NAME}"
+        print_colorized WARN "using local dev image for testing -- ${engine_image}"
     else
         local engine_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+        print_colorized WARN "using remote dev image for testing -- ${engine_image}"
     fi
     local helm_deploy_name="e2e-testing-${RANDOM:0:5}"
 
-    print_colorized WARN "running e2e tests using -- ${engine_image}"
     helm repo add stable https://kubernetes-charts.storage.googleapis.com
     helm install "${helm_deploy_name}" -f test/e2e/base-values.yaml --set anchoreEngineGlobal.image="${engine_image}" stable/anchore-engine | head -n6
 
