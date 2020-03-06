@@ -41,7 +41,7 @@ integration_tests() {
 
 functional_tests() {
     install_testing_deps anchorecli docker-compose tox
-    print_colorized WARN "running functaional tests"
+    print_colorized WARN "running functional tests"
     anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system wait --feedsready ''
     anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system status
     tox test/functional
@@ -52,7 +52,7 @@ push_dev_image() {
     local latest_image="${DEV_IMAGE_REPO}:latest"
     local branch_image="${DEV_IMAGE_REPO}:${GIT_BRANCH}"
 
-    print_colorized WARN "tagging and pushing ${dev_image}"
+    print_colorized WARN "tagging and pushing image -- ${dev_image}"
     docker tag "${TEST_IMAGE_NAME}" "${dev_image}"
     docker push "${dev_image}"
 
@@ -72,17 +72,19 @@ e2e_tests() {
     if [[ "${GIT_TAG}" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
         local engine_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
         print_colorized WARN "detected semver git tag, using RC image for testing -- ${engine_image}"
-    elif docker inspect "${TEST_IMAGE_NAME}"; then
+    elif docker inspect "${TEST_IMAGE_NAME}" &> /dev/null; then
         engine_image="${TEST_IMAGE_NAME}"
         print_colorized WARN "using local dev image for testing -- ${engine_image}"
+        # load local docker image into kind cluster to be utilized with helm chart
+        kind load docker-image "${engine_image}" --name e2e-testing
     else
         local engine_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
         print_colorized WARN "using remote dev image for testing -- ${engine_image}"
     fi
-    local helm_deploy_name="e2e-testing-${RANDOM:0:5}"
 
+    local helm_deploy_name="e2e-testing-${RANDOM:0:5}"
     helm repo add stable https://kubernetes-charts.storage.googleapis.com
-    helm install "${helm_deploy_name}" -f test/e2e/base-values.yaml --set anchoreEngineGlobal.image="${engine_image}" stable/anchore-engine | head -n6
+    helm install "${helm_deploy_name}" -f test/e2e/base-values.yaml --set anchoreGlobal.image="${engine_image}" stable/anchore-engine | head -n6
 
     # Patch anchore-engine-api nodeport to the configured port thats mapped with kind to localhost:8228
     kubectl patch service "${helm_deploy_name}-anchore-engine-api" --type=json --patch '[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":30028}]'
@@ -90,8 +92,8 @@ e2e_tests() {
     install_testing_deps anchorecli
     anchore-cli --u admin --p foobar system wait --timeout 300 --interval 10 --feedsready '' --servicesready 'catalog,apiext,policy_engine,simplequeue,analyzer'
     anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system status
-    python scripts/tests/aetest.py docker.io/alpine:latest
-    python scripts/tests/aefailtest.py docker.io/alpine:latest
+    "${PYTHON}" scripts/tests/aetest.py docker.io/alpine:latest
+    "${PYTHON}" scripts/tests/aefailtest.py docker.io/alpine:latest
 }
 
 push_rc_image() {
