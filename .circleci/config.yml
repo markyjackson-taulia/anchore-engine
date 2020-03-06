@@ -228,6 +228,13 @@ workflows:
             - functional_tests
             - integration_tests
             - e2e_tests
+      - anchore/image_scan:
+          context: dockerhub
+          requires:
+            - push_dev_image
+          image_name: anchore/anchore-engine-dev:${CIRCLE_SHA1}
+          private_registry: true
+          timeout: '2000'
 
   rc_image_workflow:
     jobs:
@@ -274,14 +281,15 @@ workflows:
     jobs:
       - unit_tests:
           filters: *filter_rebuild_tags
+      - integration_tests:
+          filters: *filter_rebuild_tags
+          requires:
+            - unit_tests
       - build:
           filters: *filter_rebuild_tags
           requires:
             - unit_tests
-      - push_image:
-          name: push_dev_image
-          make_job: push-dev
-          context: dockerhub
+      - functional_tests:
           filters: *filter_rebuild_tags
           requires:
             - build
@@ -289,12 +297,29 @@ workflows:
           context: e2e-testing
           filters: *filter_rebuild_tags
           requires:
+            - build
+      - push_image:
+          name: push_dev_image
+          make_job: push-dev
+          context: dockerhub
+          filters: *filter_rebuild_tags
+          requires:
+            - e2e_tests
+            - functional_tests
+            - integration_tests
+      - anchore/image_scan:
+          name: anchore_image_scan
+          context: dockerhub
+          requires:
             - push_dev_image
+          image_name: anchore/anchore-engine-dev:${CIRCLE_SHA1}
+          private_registry: true
+          timeout: '2000'
       - hold_for_approval:
           type: approval
           filters: *filter_rebuild_tags
           requires:
-            - e2e_tests
+            - anchore_image_scan
       - push_image:
           name: push_rebuild_image
           make_job: push-rebuild
