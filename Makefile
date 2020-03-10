@@ -183,7 +183,7 @@ setup-test-e2e: cluster-up
 		DEV_IMAGE_REPO="$(DEV_IMAGE_REPO)" \
 		DOCKER_PASS="$(DOCKER_PASS)" \
 		DOCKER_USER="$(DOCKER_USER)" \
-		GIT_TAG="$(GIT_TAG") \
+		GIT_TAG="$(GIT_TAG)" \
 		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) setup_e2e_tests
 
