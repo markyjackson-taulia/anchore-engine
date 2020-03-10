@@ -45,61 +45,61 @@ ci: build test push
 .PHONY: build
 build: Dockerfile ## build dev image
 	@export \
-		ANCHORE_CLI_VERSION=$(ANCHORE_CLI_VERSION) \
-		COMMIT_SHA=$(COMMIT_SHA) \
-		GIT_REPO=$(GIT_REPO) \
-		GIT_TAG=$(GIT_TAG) \
-		TEST_IMAGE_NAME=$(TEST_IMAGE_NAME) && \
+		ANCHORE_CLI_VERSION="$(ANCHORE_CLI_VERSION)" \
+		COMMIT_SHA="$(COMMIT_SHA)" \
+		GIT_REPO="$(GIT_REPO)" \
+		GIT_TAG="$(GIT_TAG)" \
+		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) build
 
 .PHONY: push push-dev
 push: push-dev ## push dev image to dockerhub
 push-dev: 
 	@export \
-		CI=$(CI) \
-		COMMIT_SHA=$(COMMIT_SHA) \
-		DEV_IMAGE_REPO=$(DEV_IMAGE_REPO) \
-		DOCKER_PASS=$(DOCKER_PASS) \
-		DOCKER_USER=$(DOCKER_USER) \
-		GIT_BRANCH=$(GIT_BRANCH) \
-		RELEASE_BRANCHES=$(RELEASE_BRANCHES) \
-		TEST_IMAGE_NAME=$(TEST_IMAGE_NAME) && \
+		CI="$(CI)" \
+		COMMIT_SHA="$(COMMIT_SHA)" \
+		DEV_IMAGE_REPO="$(DEV_IMAGE_REPO)" \
+		DOCKER_PASS="$(DOCKER_PASS)" \
+		DOCKER_USER="$(DOCKER_USER)" \
+		GIT_BRANCH="$(GIT_BRANCH)" \
+		RELEASE_BRANCHES="$(RELEASE_BRANCHES)" \
+		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) common/push_dev_image
 
 .PHONY: push-rc
 push-rc: 
 	@export \
-		CI=$(CI) \
-		COMMIT_SHA=$(COMMIT_SHA) \
-		DEV_IMAGE_REPO=$(DEV_IMAGE_REPO) \
-		DOCKER_PASS=$(DOCKER_PASS) \
-		DOCKER_USER=$(DOCKER_USER) \
-		GIT_TAG=$(GIT_TAG) && \
+		CI="$(CI)" \
+		COMMIT_SHA="$(COMMIT_SHA)" \
+		DEV_IMAGE_REPO="$(DEV_IMAGE_REPO)" \
+		DOCKER_PASS="$(DOCKER_PASS)" \
+		DOCKER_USER="$(DOCKER_USER)" \
+		GIT_TAG="$(GIT_TAG)" && \
 	$(RUN_SCRIPT) common/push_rc_image
 
 .PHONY: push-rebuild
 push-rebuild: 
 	@export \
-		CI=$(CI) \
-		COMMIT_SHA=$(COMMIT_SHA) \
-		DEV_IMAGE_REPO=$(DEV_IMAGE_REPO) \
-		DOCKER_PASS=$(DOCKER_PASS) \
-		DOCKER_USER=$(DOCKER_USER) \
-		GIT_TAG=$(GIT_TAG) \
-		PROD_IMAGE_REPO=$(PROD_IMAGE_REPO) && \
+		CI="$(CI)" \
+		COMMIT_SHA="$(COMMIT_SHA)" \
+		DEV_IMAGE_REPO="$(DEV_IMAGE_REPO)" \
+		DOCKER_PASS="$(DOCKER_PASS)" \
+		DOCKER_USER="$(DOCKER_USER)" \
+		GIT_TAG="$(GIT_TAG)" \
+		PROD_IMAGE_REPO="$(PROD_IMAGE_REPO)" && \
 	$(RUN_SCRIPT) common/push_prod_image_rebuild
 
 .PHONY: push-release
 push-release: 
 	@export \
-		CI=$(CI) \
-		DEV_IMAGE_REPO=$(DEV_IMAGE_REPO) \
-		DOCKER_PASS=$(DOCKER_PASS) \
-		DOCKER_USER=$(DOCKER_USER) \
-		GIT_BRANCH=$(GIT_BRANCH) \
-		GIT_TAG=$(GIT_TAG) \
-		LATEST_RELEASE_BRANCH=$(LATEST_RELEASE_BRANCH) \
-		PROD_IMAGE_REPO=$(PROD_IMAGE_REPO) && \
+		CI="$(CI)" \
+		DEV_IMAGE_REPO="$(DEV_IMAGE_REPO)" \
+		DOCKER_PASS="$(DOCKER_PASS)" \
+		DOCKER_USER="$(DOCKER_USER)" \
+		GIT_BRANCH="$(GIT_BRANCH)" \
+		GIT_TAG="$(GIT_TAG)" \
+		LATEST_RELEASE_BRANCH="$(LATEST_RELEASE_BRANCH)" \
+		PROD_IMAGE_REPO="$(PROD_IMAGE_REPO)" && \
 	$(RUN_SCRIPT) common/push_prod_image_release
 
 .PHONY: venv
@@ -118,13 +118,13 @@ install-dev: venv setup.py requirements.txt ## install project to virtual enviro
 .PHONY: compose-up
 compose-up: venv scripts/ci/docker-compose-ci.yaml ## run docker compose with dev image
 	@export \
-		TEST_IMAGE_NAME=$(TEST_IMAGE_NAME) && \
+		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) common/docker_compose_up
 
 .PHONY: compose-down
 compose-down: venv scripts/ci/docker-compose-ci.yaml ## stop docker compose
 	@export \
-		TEST_IMAGE_NAME=$(TEST_IMAGE_NAME) && \
+		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) common/docker_compose_down
 
 .PHONY: cluster-up
@@ -159,7 +159,7 @@ test-unit: test-deps
 .PHONY: test-integration
 test-integration: test-deps
 	@export \
-		CI=$(CI) && \
+		CI="$(CI)" && \
 	$(RUN_SCRIPT) integration_tests
 
 .PHONY: test-functional
@@ -179,12 +179,12 @@ test-e2e: setup-test-e2e
 .PHONY: setup-test-e2e
 setup-test-e2e: cluster-up
 	@export \
-		COMMIT_SHA=$(COMMIT_SHA) \
-		DEV_IMAGE_REPO=$(DEV_IMAGE_REPO) \
-		DOCKER_PASS=$(DOCKER_PASS) \
-		DOCKER_USER=$(DOCKER_USER) \
-		GIT_TAG=$(GIT_TAG) \
-		TEST_IMAGE_NAME=$(TEST_IMAGE_NAME) && \
+		COMMIT_SHA="$(COMMIT_SHA)" \
+		DEV_IMAGE_REPO="$(DEV_IMAGE_REPO)" \
+		DOCKER_PASS="$(DOCKER_PASS)" \
+		DOCKER_USER="$(DOCKER_USER)" \
+		GIT_TAG="$(GIT_TAG") \
+		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) setup_e2e_tests
 
 .PHONY: run-test-e2e
@@ -194,7 +194,7 @@ run-test-e2e: test-deps
 .PHONY: clean
 clean: ## clean up project directory & delete dev image
 	@export \
-		TEST_IMAGE_NAME=$(TEST_IMAGE_NAME) && \
+		TEST_IMAGE_NAME="$(TEST_IMAGE_NAME)" && \
 	$(RUN_SCRIPT) common/clean_project_dir
 
 .PHONY: printvars
