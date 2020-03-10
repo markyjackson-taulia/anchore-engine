@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${PYTHON:?'required variable'}"
+
+venv_activate
+hash pylint || "${PYTHON}" -m pip install -q pylint
+
+print_colorized WARN "linting project"
+pylint anchore_engine
+pylint anchore_manager

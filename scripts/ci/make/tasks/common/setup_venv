@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${VENV:?'required variable'}"
+
+hash python3 || (print_colorized ERROR "ensure python3 is installed before attempting to setup virtualenv" && exit 1)
+print_colorized WARN "creating virtualenv ${VENV}"
+python3 -m venv "${VENV}"
+print_colorized WARN "to enable virtual environment run: source ${VENV}/bin/activate"

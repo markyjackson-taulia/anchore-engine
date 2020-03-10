@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${PYTHON:?'required variable'}"
+
+venv_activate
+hash anchore-cli || "${PYTHON}" -m pip install -q anchorecli
+
+print_colorized WARN "running functional tests"
+anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system wait --feedsready ''
+anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system status
+tox test/functional

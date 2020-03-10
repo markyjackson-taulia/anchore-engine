@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+local kind_node_image_tag="v1.15.7@sha256:e2df133f80ef633c53c0200114fce2ed5e1f6947477dbc83261a6a921169488d"
+
+venv_activate
+# if a kind cluster named e2e-testing is running export config, otherwise create a new cluster
+if kind get clusters | grep e2e-testing; then
+    kind export kubeconfig --name e2e-testing
+else
+    kind create cluster --name e2e-testing --config test/e2e/kind-config.yaml --image "kindest/node:${kind_node_image_tag}" --wait 60s
+fi

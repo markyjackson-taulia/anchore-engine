@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+# Fail on any errors, including in pipelines and when variables are missing
+set -euo pipefail
+
+display_usage() {
+    cat << EOF
+    This script is intended to be invoked from the project Makefile, it is a simple wrapper
+    for calling scripts found in the tasks directory (${script_dir}/tasks).
+    This script handles sourcing utils library, displaying usage, and verbose output.
+
+        usage: $0 < path_to_task_script >
+EOF
+    make help
+}
+
+display_make_usage() {
+    print_colorized WARN "usage: make < recipe_name >"
+}
+
+main() {
+    local script_dir=$(cd "$(dirname ${BASH_SOURCE[0]})" && pwd)
+    local task_script="${script_dir}/tasks/${1:-null}" 
+
+    # load utility functions library
+    source "${script_dir}/utils"
+
+    setup_colors
+
+    # Check for valid input arguments
+    if [[ "$#" -eq 0 ]]; then
+        print_colorized ERROR "ERROR - script requires input" >&2
+        display_usage
+        exit 1
+    elif [[ "$1" =~ (help|-h) ]]; then
+        display_make_usage
+    # Check if the first argument is an executable script
+    elif [[ -f "${task_script}" ]]; then
+        # VERBOSE will trap all bash commands & print to screen, like using set -v but allows printing in color
+        if [[ "${VERBOSE:-false}" =~ (true|TRUE|y|Y|1) ]]; then
+            set -o functrace
+            trap 'printf "%s${INFO}+ $BASH_COMMAND${NORMAL}\n" >&2' DEBUG
+        fi
+        # run the task script with all arguments passed to it
+        source "${task_script}" "${@:2}"
+    else
+        print_colorized ERROR "ERROR - $1 is not a valid script name" >&2
+        display_usage
+        exit 1
+    fi
+}
+
+main "$@"

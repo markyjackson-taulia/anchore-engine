@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${DEV_IMAGE_REPO:?'required variable'}"
+test "${GIT_TAG:?'required variable'}"
+test "${PROD_IMAGE_REPO:?'required variable'}"
+
+# Optional ENV vars
+test "${CI:-'optional variable'}"
+test "${DOCKER_PASS:-'optional variable'}"
+test "${DOCKER_USER:-'optional variable'}"
+test "${GIT_BRANCH:-'optional variable'}"
+test "${LATEST_RELEASE_BRANCH:-'optional variable'}"
+
+local prod_image="${PROD_IMAGE_REPO}:${GIT_TAG}"
+local rc_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
+
+print_colorized WARN "Preparing images for production push to DockerHub"
+sleep 3
+
+if [[ "${CI:-null}" == true ]]; then
+    echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+
+    print_colorized WARN "pulling RC image for release -- ${rc_image}"
+    docker pull "${rc_image}"
+
+    print_colorized WARN "tagging and pushing image -- ${prod_image}"
+    docker tag "${rc_image}" "${prod_image}"
+    docker push "${prod_image}"
+
+    if [[ "${GIT_BRANCH}" =~ "${LATEST_RELEASE_BRANCH}" ]]; then
+        local latest_image="${PROD_IMAGE_REPO}:latest"
+        print_colorized WARN "tagging and pushing image -- ${latest_image}"
+        docker tag "${prod_image}" "${latest_image}"
+        docker push "${latest_image}"
+    fi
+else
+    print_colorized WARN "CI=true must be set to push image -- ${prod_image}"
+fi

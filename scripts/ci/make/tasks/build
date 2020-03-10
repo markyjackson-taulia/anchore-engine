@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${COMMIT_SHA:?'required variable'}"
+test "${GIT_REPO:?'required variable'}"
+test "${TEST_IMAGE_NAME:?'required variable'}"
+
+# optional ENV vars
+test "${GIT_TAG:-'optional variable'}"
+test "${ANCHORE_CLI_VERSION:-'optional variable'}"
+
+local build_cache=''
+# Use $ANCHORE_CLI_VERSION if it's set, otherwise get commit SHA of the latest anchore-cli tag
+local cli_commit_sha="$(echo ${ANCHORE_CLI_VERSION:=$(git ls-remote git@github.com:anchore/anchore-cli.git --sort=\"version:refname\" --tags v\* | tail -n1 | awk '{print $$1}')})"
+
+# dont use the docker build cache if building from a tag
+if [[ -n "${GIT_TAG}" ]]; then
+    print_colorized WARN "building from a git tag, disabling docker build cache"
+    local build_cache="--no-cache"
+fi
+
+print_colorized WARN "building image ${TEST_IMAGE_NAME}"
+docker build --target anchore-engine-builder ${build_cache} -t "${GIT_REPO}:builder" -f ./Dockerfile .
+docker build --build-arg ANCHORE_COMMIT="${COMMIT_SHA}" ${build_cache} --build-arg CLI_COMMIT="${cli_commit_sha}" -t "${TEST_IMAGE_NAME}" -f ./Dockerfile .
+print_colorized WARN "successfully built image -- ${TEST_IMAGE_NAME}"

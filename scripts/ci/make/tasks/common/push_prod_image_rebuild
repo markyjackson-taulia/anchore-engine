@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${COMMIT_SHA:?'required variable'}"
+test "${DEV_IMAGE_REPO:?'required variable'}"
+test "${GIT_TAG:?'required variable'}"
+test "${PROD_IMAGE_REPO:?'required variable'}"
+
+# Optional ENV vars
+test "${CI:-'optional variable'}"
+test "${DOCKER_PASS:-'optional variable'}"
+test "${DOCKER_USER:-'optional variable'}"
+
+local dev_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+local rebuild_image="${PROD_IMAGE_REPO}:${GIT_TAG}"
+
+print_colorized WARN "Preparing images for rebuild push to DockerHub"
+sleep 3
+
+if [[ "${CI:-null}" == true ]]; then
+    echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+
+    print_colorized WARN "pulling dev image for release candidate -- ${dev_image}"
+    docker pull "${dev_image}"
+
+    print_colorized WARN "tagging and pushing image -- ${rebuild_image}"
+    docker tag "${dev_image}" "${rebuild_image}"
+    docker push "${rebuild_image}"
+else
+    print_colorized WARN "CI=true must be set to push image -- ${rebuild_image}"
+fi

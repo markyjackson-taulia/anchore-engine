@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${COMMIT_SHA:?'required variable'}"
+test "${DEV_IMAGE_REPO:?'required variable'}"
+
+# Optional ENV vars
+test "${CI:-'required variable'}"
+test "${DOCKER_PASS:-'optional variable'}"
+test "${DOCKER_USER:-'optional variable'}"
+test "${GIT_TAG:-'optional variable'}"
+test "${TEST_IMAGE_NAME:-'optional variable'}"
+
+local helm_deploy_name="e2e-testing-${RANDOM:0:5}"
+local engine_image=''
+
+venv_activate
+# Use the RC image if a semver tag is pushed
+if [[ "${GIT_TAG:-null}" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+    # get the latest rc git tag for this semver & use it for the image tag
+    local engine_image="${DEV_IMAGE_REPO}:$(git describe --match "${GIT_TAG}-rc*" --tags --abbrev=0)"
+    print_colorized WARN "detected semver git tag, using RC image for e2e testing -- ${engine_image}"
+# Use the local docker image if it is available
+elif docker inspect "${TEST_IMAGE_NAME:-null}" &> /dev/null; then
+    engine_image="${TEST_IMAGE_NAME}"
+    print_colorized WARN "using local dev image for e2e testing -- ${engine_image}"
+    # load local docker image into kind cluster to be utilized with helm chart
+    kind load docker-image "${engine_image}" --name e2e-testing
+else
+    local engine_image="${DEV_IMAGE_REPO}:${COMMIT_SHA}"
+    print_colorized WARN "using remote dev image for e2e testing -- ${engine_image}"
+fi
+
+if [[ "${CI:-null}" == true ]]; then
+    # create k8s secret using $DOCKER_USER & $DOCKER_PASS and set as default imagePullCreds
+    kubectl create secret docker-registry anchore-enterprise-pullcreds --docker-server=docker.io --docker-username="${DOCKER_USER}" --docker-password="${DOCKER_PASS}" --docker-email=anchoreci@anchore.com
+    kubectl patch serviceaccount default --type=merge --patch '{"imagePullSecrets":[{"name": "anchore-enterprise-pullcreds"}]}'
+fi
+
+helm repo add stable https://kubernetes-charts.storage.googleapis.com
+helm install "${helm_deploy_name}" -f test/e2e/base-values.yaml --set anchoreGlobal.image="${engine_image}" stable/anchore-engine | head -n6
+
+# Patch anchore-engine-api nodeport to the configured port thats mapped with kind to localhost:8228
+kubectl patch service "${helm_deploy_name}-anchore-engine-api" --type=json --patch '[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":30028}]'

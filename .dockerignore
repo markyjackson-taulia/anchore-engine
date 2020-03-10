@@ -6,4 +6,5 @@
 .pytest*
 .vscode
 venv
+scripts/ci
 Makefile

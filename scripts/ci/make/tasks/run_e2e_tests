@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${PYTHON:?'required variable'}"
+
+venv_activate
+hash anchore-cli || "${PYTHON}" -m pip install -q anchorecli
+
+print_colorized WARN "running e2e tests"
+anchore-cli --u admin --p foobar system wait --timeout 300 --interval 10 --feedsready '' --servicesready 'catalog,apiext,policy_engine,simplequeue,analyzer'
+anchore-cli --u admin --p foobar --url http://localhost:8228/v1 system status
+"${PYTHON}" scripts/tests/aetest.py docker.io/alpine:latest
+"${PYTHON}" scripts/tests/aefailtest.py docker.io/alpine:latest

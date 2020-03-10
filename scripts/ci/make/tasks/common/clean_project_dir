@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# This is intended to be called by the scripts/ci/make/run_task_command wrapper script
+# DO NOT try to execute directly, it probably will not work
+
+# All ENVIRONMENT VARIABLES for task are declared in the project Makefile
+
+# Required ENV vars
+test "${TEST_IMAGE_NAME:?'required variable'}"
+test "${VENV:?'required variable'}"
+
+print_colorized ERROR "deleting virtualenv, cache, build and testing temp data"
+continue_prompt
+
+rm -rf "${VENV}" \
+    *.egg-info \
+    dist \
+    build \
+    .tox
+find . \( -type f -name "*.py[co]" -o -type d -name "__pycache__" \) -delete
+
+print_colorized ERROR "deleting image -- ${TEST_IMAGE_NAME}"
+continue_prompt
+
+docker rmi "${TEST_IMAGE_NAME}"
