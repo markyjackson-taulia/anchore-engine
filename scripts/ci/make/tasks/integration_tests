@@ -5,6 +5,12 @@
 
 # All ENVIRONMENT VARIABLES for task are declared in the project Makefile
 
+test "${CI:-'optional vaiable'}"
+
 venv_activate
 print_colorized WARN "running integration tests"
-./scripts/tests/test_with_deps.sh test/integration/
+if [[ "${CI:-null}" == true ]]; then
+    tox test/integration
+else
+    ./scripts/tests/test_with_deps.sh test/integration/
+fi
