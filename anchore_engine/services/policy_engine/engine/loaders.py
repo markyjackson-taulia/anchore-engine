@@ -757,7 +757,7 @@ class ImageLoader(object):
         return pkgs, handled_pkgtypes
 
     def load_generic_packages(self, analysis_json, containing_image, excludes=[]):
-        log.debug("HELLO: {}".format(excludes))
+        pkgs = []
         handled_pkgtypes = []
         package_types = analysis_json.get('package_list', {}).keys()
         for package_type in package_types:
@@ -771,7 +771,6 @@ class ImageLoader(object):
                     if not pkgs_json:
                         return [], handled_pkgtypes
 
-                    pkgs = []
                     for path, pkg_str in list(pkgs_json.items()):
                         pkg_json = json.loads(pkg_str)
                         n = ImagePackage()
