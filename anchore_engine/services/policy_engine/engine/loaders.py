@@ -762,7 +762,7 @@ class ImageLoader(object):
         package_types = analysis_json.get('package_list', {}).keys()
         for package_type in package_types:
             if package_type not in excludes:
-                patt = re.match("pkgs\.(.*)", package_type)
+                patt = re.match(r"pkgs\.(.*)", package_type)
                 if patt:
                     ptype = patt.group(1)
                     handled_pkgtypes.append(ptype)                    
